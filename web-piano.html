@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mini Harmonium with Reverb & Full Notes</title>
+  <style>
+    body {
+      text-align: center;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    #keys {
+      position: relative;
+      width: max-content;
+      margin: auto;
+      display: flex;
+    }
+
+    .white {
+      width: 50px;
+      height: 200px;
+      background: white;
+      border: 1px solid black;
+      position: relative;
+      z-index: 1;
+      margin-right: 2px;
+      box-sizing: border-box;
+      text-align: center;
+      line-height: 180px;
+      font-size: 14px;
+    }
+
+    .white span {
+      position: absolute;
+      bottom: 5px;
+      width: 100%;
+      color: blue;
+      font-size: 12px;
+    }
+
+    .black {
+      width: 30px;
+      height: 120px;
+      background: black;
+      color: white;
+      position: absolute;
+      top: 0;
+      z-index: 2;
+      text-align: center;
+      font-size: 12px;
+      line-height: 120px;
+      border-radius: 0 0 4px 4px;
+      cursor: pointer;
+    }
+
+    .key.pressed {
+      background-color: skyblue !important;
+      color: white;
+    }
+
+    /* Position black keys manually over white keys */
+    .b1 { left: 35px; }
+    .b2 { left: 85px; }
+    .b3 { left: 185px; }
+    .b4 { left: 235px; }
+    .b5 { left: 285px; }
+    .b6 { left: 335px; }
+    .b7 { left: 385px; }
+  </style>
+</head>
+<body>
+
+<h1>🎹 Full Harmonium (QWERTYUIOP[]\ + 1234567890)</h1>
+<label><input type="checkbox" id="reverbToggle"> Enable Reverb</label>
+
+<div id="keys">
+  <!-- White Keys -->
+  <div class="white key" data-note="0" data-key="q">Q<span>C</span></div>
+  <div class="white key" data-note="2" data-key="w">W</div>
+  <div class="white key" data-note="4" data-key="e">E<span>D</span></div>
+  <div class="white key" data-note="5" data-key="r">R</div>
+  <div class="white key" data-note="7" data-key="t">T<span>E</span></div>
+  <div class="white key" data-note="9" data-key="y">Y<span>F</span></div>
+  <div class="white key" data-note="11" data-key="u">U</div>
+  <div class="white key" data-note="12" data-key="i">I<span>G</span></div>
+  <div class="white key" data-note="14" data-key="o">O</div>
+  <div class="white key" data-note="16" data-key="p">P<span>A</span></div>
+  <div class="white key" data-note="17" data-key="[">[</div>
+  <div class="white key" data-note="19" data-key="]">]</div>
+  <div class="white key" data-note="21" data-key="\\">\</div>
+
+  <!-- Black Keys -->
+  <div class="black key b1" data-note="1" data-key="1">1</div>
+  <div class="black key b2" data-note="3" data-key="2">2</div>
+  <div class="black key b3" data-note="6" data-key="4">4</div>
+  <div class="black key b4" data-note="8" data-key="5">5</div>
+  <div class="black key b5" data-note="10" data-key="7">7</div>
+  <div class="black key b6" data-note="13" data-key="8">8</div>
+  <div class="black key b7" data-note="15" data-key="9">9</div>
+</div>
+
+<script>
+  let context = new (window.AudioContext || window.webkitAudioContext)();
+  let buffer = null;
+  let reverbBuffer = null;
+  const activeNotes = {};
+
+  fetch("https://rajaramaniyer.github.io/harmonium-kannan-orig.wav")
+    .then(res => res.arrayBuffer())
+    .then(data => context.decodeAudioData(data))
+    .then(decoded => { buffer = decoded; });
+
+  fetch("https://rajaramaniyer.github.io/reverb.wav")
+    .then(res => res.arrayBuffer())
+    .then(data => context.decodeAudioData(data))
+    .then(decoded => { reverbBuffer = decoded; });
+
+  function startNote(key, semitone) {
+    if (!buffer || activeNotes[key]) return;
+    if (context.state === 'suspended') context.resume();
+
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.loopStart = 0.5;
+    source.loopEnd = 7.5;
+    source.detune.value = semitone * 100;
+
+    const gain = context.createGain();
+    gain.gain.value = 1.0;
+
+    if (document.getElementById('reverbToggle').checked && reverbBuffer) {
+      const convolver = context.createConvolver();
+      convolver.buffer = reverbBuffer;
+      gain.connect(convolver);
+      convolver.connect(context.destination);
+    } else {
+      gain.connect(context.destination);
+    }
+
+    source.connect(gain);
+    source.start();
+    activeNotes[key] = { source };
+  }
+
+  function stopNote(key) {
+    if (activeNotes[key]) {
+      activeNotes[key].source.stop();
+      delete activeNotes[key];
+    }
+  }
+
+  document.querySelectorAll('.key').forEach(elem => {
+    const semitone = parseInt(elem.getAttribute('data-note'));
+    const keyChar = elem.getAttribute('data-key');
+
+    elem.addEventListener('mousedown', () => {
+      elem.classList.add('pressed');
+      startNote(keyChar, semitone);
+    });
+
+    elem.addEventListener('mouseup', () => {
+      elem.classList.remove('pressed');
+      stopNote(keyChar);
+    });
+
+    elem.addEventListener('mouseleave', () => {
+      elem.classList.remove('pressed');
+      stopNote(keyChar);
+    });
+  });
+
+  const keyMap = {
+    'q': 0, 'w': 2, 'e': 4, 'r': 5, 't': 7, 'y': 9, 'u': 11,
+    'i': 12, 'o': 14, 'p': 16, '[': 17, ']': 19, '\\': 21,
+    '1': 1, '2': 3, '4': 6, '5': 8, '7': 10, '8': 13, '9': 15
+  };
+
+  document.addEventListener('keydown', e => {
+    const key = e.key.toLowerCase();
+    if (keyMap.hasOwnProperty(key)) {
+      startNote(key, keyMap[key]);
+      document.querySelectorAll(`[data-key="${key}"]`).forEach(k => k.classList.add('pressed'));
+    }
+  });
+
+  document.addEventListener('keyup', e => {
+    const key = e.key.toLowerCase();
+    if (keyMap.hasOwnProperty(key)) {
+      stopNote(key);
+      document.querySelectorAll(`[data-key="${key}"]`).forEach(k => k.classList.remove('pressed'));
+    }
+  });
+</script>
+</body>
+</html>
+  
